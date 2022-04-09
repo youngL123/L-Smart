@@ -305,8 +305,10 @@ def apply_box_deltas(boxes, deltas):
     center_y = boxes[:, 0] + 0.5 * height
     center_x = boxes[:, 1] + 0.5 * width
     # Apply deltas
+    #先做平移
     center_y += deltas[:, 0] * height
     center_x += deltas[:, 1] * width
+    #再做缩放
     height *= torch.exp(deltas[:, 2])
     width *= torch.exp(deltas[:, 3])
     # Convert back to y1, x1, y2, x2
@@ -322,6 +324,7 @@ def clip_boxes(boxes, window):
     boxes: [N, 4] each col is y1, x1, y2, x2
     window: [4] in the form y1, x1, y2, x2
     """
+    #限制boxes不可超出边界
     boxes = torch.stack( \
         [boxes[:, 0].clamp(float(window[0]), float(window[2])),
          boxes[:, 1].clamp(float(window[1]), float(window[3])),
@@ -361,6 +364,7 @@ def proposal_layer(inputs, proposal_count, nms_threshold, anchors, config=None):
     # and doing the rest on the smaller subset.
     pre_nms_limit = min(6000, anchors.size()[0])
     scores, order = scores.sort(descending=True)
+    #根据score选择前6000个预测值
     order = order[:pre_nms_limit]
     scores = scores[:pre_nms_limit]
     deltas = deltas[order.data, :] # TODO: Support batch size > 1 ff.
@@ -368,11 +372,13 @@ def proposal_layer(inputs, proposal_count, nms_threshold, anchors, config=None):
 
     # Apply deltas to anchors to get refined anchors.
     # [batch, N, (y1, x1, y2, x2)]
+    #得到调整后的anchors
     boxes = apply_box_deltas(anchors, deltas)
 
     # Clip to image boundaries. [batch, N, (y1, x1, y2, x2)]
     height, width = config.IMAGE_SHAPE[:2]
     window = np.array([0, 0, height, width]).astype(np.float32)
+    #剔除超出图像边界的anchors
     boxes = clip_boxes(boxes, window)
 
     # Filter out small boxes
@@ -380,7 +386,11 @@ def proposal_layer(inputs, proposal_count, nms_threshold, anchors, config=None):
     # for small objects, so we're skipping it.
 
     # Non-max suppression
+    #思想：将各个框的置信度进行排序，选择置信度最高的框（例A），将其作为标准选框
+    #设置一个阈值，当其他框B与A的iou超过阈值就将B舍弃
+    #再在剩下的框中选择置信度最高的标准框，循环执行
     keep = nms(torch.cat((boxes, scores.unsqueeze(1)), 1).data, nms_threshold)
+    #最终选出2000个anchors
     keep = keep[:proposal_count]
     boxes = boxes[keep, :]
 
