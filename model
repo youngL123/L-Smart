@@ -433,7 +433,7 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     for i in range(len(inputs)):
         inputs[i] = inputs[i].squeeze(0)
 
-    # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords
+    # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords 用规范化坐标裁剪boxs
     boxes = inputs[0]
 
     # Feature Maps. List of feature maps from different level of the
@@ -448,21 +448,24 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     # Equation 1 in the Feature Pyramid Networks paper. Account for
     # the fact that our coordinates are normalized here.
     # e.g. a 224x224 ROI (in pixels) maps to P4
+    # 根据FPN论文中的公式1,确定每个ROI使用哪一层特征层进行ROIpooling操作
     image_area = Variable(torch.FloatTensor([float(image_shape[0]*image_shape[1])]), requires_grad=False)
+    # roi_level限制在[2.5]之间，对应[P2,P3,P4,P5]
     if boxes.is_cuda:
         image_area = image_area.cuda()
     roi_level = 4 + log2(torch.sqrt(h*w)/(224.0/torch.sqrt(image_area)))
-    roi_level = roi_level.round().int()
+    roi_level = roi_level.round().int()  #返回四舍五入值
     roi_level = roi_level.clamp(2,5)
 
 
-    # Loop through levels and apply ROI pooling to each. P2 to P5.
+    # Loop循环 through levels and apply ROI pooling to each. P2 to P5.
     pooled = []
     box_to_level = []
     for i, level in enumerate(range(2, 6)):
         ix  = roi_level==level
         if not ix.any():
             continue
+        # 提取满足索引的对应boxes
         ix = torch.nonzero(ix)[:,0]
         level_boxes = boxes[ix.data, :]
 
@@ -477,10 +480,11 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         # that we can evaluate either max or average pooling. In fact,
         # interpolating only a single value at each bin center (without
         # pooling) is nearly as effective."
-        #
+        #双线性插值计算each bin center 坐标
         # Here we use the simplified approach of a single value per bin,
         # which is how it's done in tf.crop_and_resize()
         # Result: [batch * num_boxes, pool_height, pool_width, channels]
+        # 使用crop_and_resize()实现简化的ROIAling，每个bin只取一个点
         ind = Variable(torch.zeros(level_boxes.size()[0]),requires_grad=False).int()
         if level_boxes.is_cuda:
             ind = ind.cuda()
@@ -493,10 +497,12 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
 
     # Pack box_to_level mapping into one array and add another
     # column representing the order of pooled boxes
+    # 将box_to_level映射到一个数组中，并新增一列表示池化顺序
     box_to_level = torch.cat(box_to_level, dim=0)
 
     # Rearrange pooled features to match the order of the original boxes
     _, box_to_level = torch.sort(box_to_level)
+    #pooled_features的顺序与原始boxes的顺序可能不同，因此需要重新排序
     pooled = pooled[box_to_level, :, :]
 
     return pooled
