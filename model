@@ -193,25 +193,30 @@ class FPN(nn.Module):
 
 
 ############################################################
-#  Resnet Graph
+#  Resnet Graph  #ResNet中使用bottleneck结构通过增加层数变相减少了参数
 ############################################################
 
 class Bottleneck(nn.Module):
-    expansion = 4
-
+    expansion = 4 #最后一个卷积输出的维度数与第一层输入的维度数的壁纸
+#downsample下采样——池化作用，downsample的操作就是判断是否会保持输入输出的维度一致，如果不一致就需要downsample
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
+        #1*1卷积降维
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride)
         self.bn1 = nn.BatchNorm2d(planes, eps=0.001, momentum=0.01)
+        #输入层尺寸=输出层尺寸 class SamePad2d
         self.padding2 = SamePad2d(kernel_size=3, stride=1)
+        #3*3卷积核卷积
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3)
         self.bn2 = nn.BatchNorm2d(planes, eps=0.001, momentum=0.01)
+        #1*1升维，channel数量*4
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1)
         self.bn3 = nn.BatchNorm2d(planes * 4, eps=0.001, momentum=0.01)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
-
+#实现模型的功能，实现各个层之间的连接
+#在定义网络结构和定义网络层之前都需要forward
     def forward(self, x):
         residual = x
 
@@ -234,7 +239,7 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
-
+#inplanes输入维度（通道数）
 class ResNet(nn.Module):
 
     def __init__(self, architecture, stage5=False):
@@ -244,7 +249,7 @@ class ResNet(nn.Module):
         self.layers = [3, 4, {"resnet50": 6, "resnet101": 23}[architecture], 3]
         self.block = Bottleneck
         self.stage5 = stage5
-
+#最大池化降维
         self.C1 = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64, eps=0.001, momentum=0.01),
