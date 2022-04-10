@@ -869,6 +869,7 @@ def detection_layer(config, rois, mrcnn_class, mrcnn_bbox, image_meta):
 ############################################################
 
 class RPN(nn.Module):
+#通过cls+reg可以得到生成的anchor中是background或是foreground的概率以及对boxes坐标的回归。
     """Builds the model of Region Proposal Network.
 
     anchors_per_location: number of anchors per pixel in the feature map
